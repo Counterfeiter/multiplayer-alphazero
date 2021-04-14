@@ -11,9 +11,10 @@ def play_match(game, players, verbose=False, permute=False):
     matches = list(permutations(np.arange(len(players)))) if permute else [np.arange(len(players))]
     
     # Initialize scoreboard
-    scores = np.zeros(game.get_num_players())
+    scores = np.zeros(len(players))
 
     # Run the matches (there will be multiple if permute=True)
+    print("Playing " + str(matches) + "...")
     for order in matches:
 
         for p in players:
@@ -30,7 +31,7 @@ def play_match(game, players, verbose=False, permute=False):
             if verbose: game.visualize(s)
             game_over = game.check_game_over(s)
 
-        scores[list(order)] += game_over
+        scores[list(order)] += game_over[:len(players)]
         if verbose: print("Δ" + str(game_over[list(order)]) + ", Current scoreboard: " + str(scores))
 
 

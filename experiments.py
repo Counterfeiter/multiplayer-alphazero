@@ -15,10 +15,10 @@ from play import play_match
 def evaluate_against_uninformed(checkpoint, game, model_class, my_sims, opponent_sims, cuda=False):
     my_model = NeuralNetwork(game, model_class, cuda=cuda)
     my_model.load(checkpoint)
-    num_opponents = game.get_num_players() - 1
+    num_opponents = game.get_current_players(game.get_initial_state()) - 1
     uninformeds = [UninformedMCTSPlayer(game, opponent_sims) for _ in range(num_opponents)]
     informed = DeepMCTSPlayer(game, my_model, my_sims)
-    scores = play_match(game, [informed] + uninformeds, permute=True)
+    scores = play_match(game, [informed] + uninformeds, permute=False)
     print("Opponent strength: {}     Scores: {}".format(opponent_sims, scores))
 
 

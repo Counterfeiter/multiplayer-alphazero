@@ -7,6 +7,10 @@ import copy
 # Concerns: No Dir noise being added. If it is added, tests would break.
 # Caveat: Make Dir a switch, write tests that use Dir with fixed seed.
 
+MCTS_STOAGE_INDEX_BESTACTION = 0
+MCTS_STOAGE_INDEX_N = 1
+MCTS_STOAGE_INDEX_Q = 2
+MCTS_STOAGE_INDEX_P = 3
 
 # An efficient, vectorized Monte Carlo tree search implementation.
 # Uses no loops, done completely with numpy.
@@ -19,8 +23,10 @@ class MCTS():
 
     # Produces a hash-friendly representation of an ndarray.
     # This is used to index nodes in the accumulated Monte Carlo tree.
+    # forward to the game, because of possbile hidden game states a hash
+    # over the oberservations is not enough
     def np_hash(self, data):
-        return data["state"].tostring()
+        return self.game.get_hash(data)
 
     # Run a MCTS simulation starting from state s of the tree.
     # The tree is accumulated in the self.tree dictionary.
@@ -32,19 +38,19 @@ class MCTS():
         current_player = self.game.get_player(s)
         if hashed_s in self.tree: # Not at leaf; select.
             stats = self.tree[hashed_s]
-            N, Q, P = stats["state"][:,1], stats["state"][:,2], stats["state"][:,3]
+            N, Q, P = stats["obs"][:,MCTS_STOAGE_INDEX_N], stats["obs"][:,MCTS_STOAGE_INDEX_Q], stats["obs"][:,MCTS_STOAGE_INDEX_P]
             U = cpuct*P*math.sqrt(N.sum() + (1e-6 if epsilon_fix else 0))/(1 + N)
             heuristic = Q + U
             best_a_idx = np.argmax(heuristic)
-            best_a = stats["state"][best_a_idx, 0] # Pick best action to take
+            best_a = stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_BESTACTION] # Pick best action to take
             template = np.zeros_like(self.game.get_available_actions(s)) # Submit action to get s'
             template[tuple(best_a)] = True
             s_prime = self.game.take_action(s, template)
             scores = self.simulate(s_prime) # Forward simulate with this action
             n, q = N[best_a_idx], Q[best_a_idx]
             v = scores[current_player] # Index in to find our reward
-            stats["state"][best_a_idx, 2] = (n*q+v)/(n + 1)
-            stats["state"][best_a_idx, 1] += 1
+            stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_Q] = (n*q+v)/(n + 1)
+            stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_N] += 1
             return scores
 
         else: # Expand
@@ -57,7 +63,7 @@ class MCTS():
             stats = np.zeros((len(idx), 4), dtype=np.object)
             stats[:,-1] = p
             stats[:,0] = list(idx)
-            self.tree[hashed_s] = { "env":copy.deepcopy(s["env"]), "state":stats }
+            self.tree[hashed_s] = { "env":copy.deepcopy(s["env"]), "obs":stats }
             return v
 
 
@@ -65,10 +71,10 @@ class MCTS():
     # The temperature parameter softens or hardens this distribution.
     def get_distribution(self, s, temperature):
         hashed_s = self.np_hash(s)
-        stats = self.tree[hashed_s]["state"][:,:2].copy()
+        stats = self.tree[hashed_s]["obs"][:,:2].copy()
         N = stats[:,1]
         try:
-            raised = np.power(N, 1/temperature)
+            raised = np.power(N, 1./temperature)
         # As temperature approaches 0, the effect becomes equivalent to argmax.
         except (ZeroDivisionError, OverflowError):
             raised = np.zeros_like(N)

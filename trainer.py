@@ -23,15 +23,17 @@ class Trainer:
 
 
     # Does one game of self play and generates training samples.
-    def self_play(self, temperature):
+    def self_play(self, temperature, nn):
         s = self.game.get_initial_state()
-        tree = MCTS(self.game, self.nn)
+        tree = MCTS(self.game, nn)
 
         data = []
         scores = self.game.check_game_over(s)
         root = True
-        alpha = 1
-        weight = .25
+        alpha = 0.03#1
+        weight = .20
+        #self.dir_epsilon = 0.20
+        #self.dir_noise = 0.03
         while scores is None:
             
             # Think
@@ -44,12 +46,12 @@ class Trainer:
             # Add dirichlet noise to root
             if root:
                 noise = np.random.dirichlet(np.array(alpha*np.ones_like(dist[:,1].astype(np.float32))))
-                dist[:,1] = dist[:,1]*(1-weight) + noise*weight
+                dist[:,1] = dist[:,1]*(1.-weight) + noise*weight
                 root = False
 
             available = self.game.get_available_actions(s)
 
-            data.append([s["state"], dist[:,1], None, available]) # state, prob, action_mask, outcome
+            data.append([s["obs"], dist[:,1], None, available]) # state, prob, action_mask, outcome
 
             # Sample an action
             idx = np.random.choice(len(dist), p=dist[:,1].astype(np.float))
@@ -67,19 +69,19 @@ class Trainer:
         for i, _ in enumerate(data):
             data[i][2] = scores
 
-        return np.array(data)
+        return np.array(data, dtype=np.object)
 
 
     # Performs one iteration of policy improvement.
     # Creates some number of games, then updates network parameters some number of times from that training data.
     def policy_iteration(self, verbose=False):
-        temperature = 1   
+        temperature = 1.5
 
         if verbose:
             print("SIMULATING " + str(self.num_games) + " games")
             start = time.time()
         if self.num_threads > 1:
-            jobs = [temperature]*self.num_games
+            jobs = [(temperature, self.nn)]*self.num_games
             pool = ThreadPool(self.num_threads)
             new_data = pool.map(self.self_play, jobs)
             pool.close()
@@ -87,7 +89,7 @@ class Trainer:
             self.training_data = np.concatenate([self.training_data] + new_data, axis=0)
         else:
             for _ in range(self.num_games): # Self-play games
-                new_data = self.self_play(temperature)
+                new_data = self.self_play(temperature, self.nn)
                 self.training_data = np.concatenate([self.training_data, new_data], axis=0)
         if verbose:
             print("Simulating took " + str(int(time.time()-start)) + " seconds")

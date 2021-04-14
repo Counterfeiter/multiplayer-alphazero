@@ -6,6 +6,7 @@ from models.senet import SENet
 from models.senetbig import SENetBig
 from games.tictactoe import TicTacToe
 from games.tictacmo import TicTacMo
+from games.kingdombuilder import AZKingdomBuilder as KingdomBuilder
 from games.connect3x3 import Connect3x3
 from neural_network import NeuralNetwork
 from trainer import Trainer
@@ -57,6 +58,7 @@ while True:
 
     # Evaluate how the current checkpoint performs against MCTS agents of increasing strength
     # that do no use a heursitic.
-    for opponent_strength in [10, 20, 40, 80, 160, 320, 640, 1280]:
+    print("Evaluate current checkpoint")
+    for opponent_strength in [10, 20, 40, 80]:
         evaluate_against_uninformed(checkpoint=iteration, game=game, model_class=model_class,
             my_sims=sims, opponent_sims=opponent_strength, cuda=cuda)
