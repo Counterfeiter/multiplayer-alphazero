@@ -6,6 +6,8 @@ from .kingdombuildergym import ParametricCNNKingdomBuilderEnv
 sys.path.append("..")
 from game import Game
 
+scalernorm = lambda xarr : [((x - min(xarr)) / (max(xarr) - min(xarr)) * (1. - (-1.)) + (-1.)) for x in xarr]
+
 # Implementation for three-player Tic-Tac-Toe.
 class AZKingdomBuilder(Game):
 
@@ -13,10 +15,12 @@ class AZKingdomBuilder(Game):
     # There are extra layers to represent X and O pieces, as well as a turn indicator layer.
     def get_initial_state(self, **kwargs):
         #level = 'easy'
+        #level = 'intermediate'
         level = 'professional'
         train = True
         if 'train' in kwargs:
             train = kwargs['train']
+        print("Game is in " + ("train state" if train else "evaluation state"))
         env = ParametricCNNKingdomBuilderEnv(level=level, normalize_obs=True, verbose=0, fail_actions=1, train=train)
         obs = env.reset()
         return {"env":env, "obs":obs["obs"]}
@@ -36,20 +40,35 @@ class AZKingdomBuilder(Game):
    # Check all possible 3-in-a-rows for a win.
     def check_game_over(self, s):
         if s["env"].done:
-            rew = -np.ones(self.get_num_players())
-            score = np.array([player.score for player in s["env"].wrapped.game.players])
-            #consider multiple winner
-            for winner in np.argwhere(score == np.amax(score)).flatten():
-                rew[winner] = 1
-            return rew
-        return None
+            return True
+        return False
+    
+    # if you have a game where the winner is unknown until the game is done
+    # return None until game is done
+    def get_scores(self, s):
+        score = s["env"].game.rules.score(s["env"].game.players)
+        if s["env"].done:
+            print("Game ends with score:" , score)
+        rew = -np.ones(self.get_num_players())
+        #consider multiple winner
+        #for winner in np.argwhere(score == np.amax(score)).flatten():
+        #    rew[winner] = 1
+
+        #print("Games ends: ", rew)
+        if min(score) == max(score):
+            #all player playing this match wins because all have equal score or zero score at start
+            return np.append(np.ones(len(score)), -np.ones(self.get_num_players() - len(score)))
+
+        for i, score in enumerate(scalernorm(score)):
+            rew[i] = score
+        return rew
 
     # Return 0 for X's turn or 1 for O's turn.
     def get_player(self, s):
-        return int(s["env"].wrapped.game.player) - 1
+        return int(s["env"].game.player) - 1
 
     def get_current_players(self, s):
-        return len(s["env"].wrapped.game.players)
+        return len(s["env"].game.players)
 
     # Fixed constant for max players
     def get_num_players(self):
@@ -57,11 +76,12 @@ class AZKingdomBuilder(Game):
 
     # Print a human-friendly visualization of the board.
     def visualize(self, s):
-        print(s["env"].wrapped.game.board)
+        print(s["env"].game.board)
 
     def get_hash(self, s):
-        return  hash(str(s["env"].wrapped.game.main_move).encode("ascii") + \
-                str(s["env"].wrapped.game.old_action).encode("ascii") + \
-                str(s["env"].wrapped.game.player.card).encode("ascii") + \
-                str(s["env"].wrapped.game.select_coord).encode("ascii") + \
+        return  hash(str(s["env"].game.main_move).encode("ascii") + \
+                str(s["env"].game.old_action).encode("ascii") + \
+                str(s["env"].game.player.card).encode("ascii") + \
+                str(s["env"].game.select_coord).encode("ascii") + \
+                str(s["env"].game.townstoplay).encode("ascii") + \
                 s["obs"].tostring() + self.get_available_actions(s).tostring())

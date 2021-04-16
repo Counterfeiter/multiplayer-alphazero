@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import copy
+import sys
 
 # Concerns: Add epsilon amount to UCB evaluation to ensure probability is considered
 # Caveat: Q in heuristic might obviate this.
@@ -16,10 +17,11 @@ MCTS_STOAGE_INDEX_P = 3
 # Uses no loops, done completely with numpy.
 class MCTS():
 
-    def __init__(self, game, nn):
+    def __init__(self, game, nn, add_noise = False):
         self.game = game
         self.nn = nn
         self.tree = {}
+        self.add_noise = False
 
     # Produces a hash-friendly representation of an ndarray.
     # This is used to index nodes in the accumulated Monte Carlo tree.
@@ -37,6 +39,7 @@ class MCTS():
         hashed_s = self.np_hash(s) # Key for state in dictionary
         current_player = self.game.get_player(s)
         if hashed_s in self.tree: # Not at leaf; select.
+            #print("select")
             stats = self.tree[hashed_s]
             N, Q, P = stats["obs"][:,MCTS_STOAGE_INDEX_N], stats["obs"][:,MCTS_STOAGE_INDEX_Q], stats["obs"][:,MCTS_STOAGE_INDEX_P]
             U = cpuct*P*math.sqrt(N.sum() + (1e-6 if epsilon_fix else 0))/(1 + N)
@@ -46,6 +49,13 @@ class MCTS():
             template = np.zeros_like(self.game.get_available_actions(s)) # Submit action to get s'
             template[tuple(best_a)] = True
             s_prime = self.game.take_action(s, template)
+            hs_prime = self.np_hash(s_prime)
+            # recursion is not always bad in all games...
+            # maybe in your game you have to pull a new card from stack 
+            # or roll a dice until you have a specific value...
+            # action masking will consider for correct gameplay
+            if hs_prime == hashed_s:
+                print("Recursion detected with action: ", best_a)
             scores = self.simulate(s_prime) # Forward simulate with this action
             n, q = N[best_a_idx], Q[best_a_idx]
             v = scores[current_player] # Index in to find our reward
@@ -54,17 +64,31 @@ class MCTS():
             return scores
 
         else: # Expand
-            scores = self.game.check_game_over(s)
-            if scores is not None: # Reached a terminal node
-                return scores
+            #print("expand")
+            if self.game.check_game_over(s): # Reached a terminal node
+                score = self.game.get_scores(s)
+                return score
             available_actions = self.game.get_available_actions(s)
             idx = np.stack(np.where(available_actions)).T
             p, v = self.nn.predict(s)
+            ### TODO: settings to config file
+            if self.add_noise:
+                alpha = 0.03
+                weight = 0.20
+                noise = np.random.dirichlet([alpha]*np.atleast_1d(p).shape[0])
+                p = p*(1.-weight) + noise*weight
+            ###
             stats = np.zeros((len(idx), 4), dtype=np.object)
             stats[:,-1] = p
             stats[:,0] = list(idx)
-            self.tree[hashed_s] = { "env":copy.deepcopy(s["env"]), "obs":stats }
-            return v
+            self.tree[hashed_s] = { "env":s["env"], "obs":stats }
+            # if we have perfect information about the current game states, 
+            # we could use this to speed up the training
+            # TODO: add later a regulation paramter to consider more value head outputs
+            # playing with scores from current game state only could result in simpler
+            # strategies in a lot of games
+            v_from_game = self.game.get_scores(s)
+            return v_from_game if v_from_game is not None else v
 
 
     # Returns the MCTS policy distribution for state s.

@@ -25,16 +25,12 @@ class Trainer:
     # Does one game of self play and generates training samples.
     def self_play(self, temperature, nn):
         s = self.game.get_initial_state()
-        tree = MCTS(self.game, nn)
+        tree = MCTS(self.game, nn, add_noise=True)
 
         data = []
-        scores = self.game.check_game_over(s)
-        root = True
-        alpha = 0.03#1
-        weight = .20
-        #self.dir_epsilon = 0.20
-        #self.dir_noise = 0.03
-        while scores is None:
+        done = self.game.check_game_over(s)
+
+        while not done:
             
             # Think
             for _ in range(self.num_simulations):
@@ -43,15 +39,9 @@ class Trainer:
             # Fetch action distribution and append training example template.
             dist = tree.get_distribution(s, temperature=temperature)
 
-            # Add dirichlet noise to root
-            if root:
-                noise = np.random.dirichlet(np.array(alpha*np.ones_like(dist[:,1].astype(np.float32))))
-                dist[:,1] = dist[:,1]*(1.-weight) + noise*weight
-                root = False
-
             available = self.game.get_available_actions(s)
 
-            data.append([s["obs"], dist[:,1], None, available]) # state, prob, action_mask, outcome
+            data.append([s["obs"], dist[:,1], None, available]) # state, prob, outcome, action_mask
 
             # Sample an action
             idx = np.random.choice(len(dist), p=dist[:,1].astype(np.float))
@@ -63,11 +53,15 @@ class Trainer:
             s = self.game.take_action(s, template)
 
             # Check scores
-            scores = self.game.check_game_over(s)
+            done = self.game.check_game_over(s)
+
+        scores = self.game.get_scores(s)
 
         # Update training examples with outcome
         for i, _ in enumerate(data):
             data[i][2] = scores
+
+        print("Tree length", len(tree.tree))
 
         return np.array(data, dtype=np.object)
 
@@ -75,7 +69,7 @@ class Trainer:
     # Performs one iteration of policy improvement.
     # Creates some number of games, then updates network parameters some number of times from that training data.
     def policy_iteration(self, verbose=False):
-        temperature = 1.5
+        temperature = 1.0
 
         if verbose:
             print("SIMULATING " + str(self.num_games) + " games")

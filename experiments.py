@@ -15,11 +15,20 @@ from play import play_match
 def evaluate_against_uninformed(checkpoint, game, model_class, my_sims, opponent_sims, cuda=False):
     my_model = NeuralNetwork(game, model_class, cuda=cuda)
     my_model.load(checkpoint)
-    num_opponents = game.get_current_players(game.get_initial_state()) - 1
+    s = game.get_initial_state(train = False)
+    game_over = game.check_game_over(s)
+    num_opponents = game.get_current_players(s) - 1
     uninformeds = [UninformedMCTSPlayer(game, opponent_sims) for _ in range(num_opponents)]
     informed = DeepMCTSPlayer(game, my_model, my_sims)
-    scores = play_match(game, [informed] + uninformeds, permute=False)
-    print("Opponent strength: {}     Scores: {}".format(opponent_sims, scores))
+    players = [informed] + uninformeds
+    verbose = False
+    while not game_over:
+        p = game.get_player(s) # let the game decide start player and turn actions
+        if verbose: print("Player #{}'s turn.".format(p))
+        s = players[p].update_state(s)
+        if verbose: game.visualize(s)
+        game_over = game.check_game_over(s)
+    print("Opponent strength: {}     Scores: {}".format(opponent_sims, game.get_scores(s)))
 
 
 # Tracks the current best checkpoint across all checkpoints

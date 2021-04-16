@@ -10,7 +10,7 @@ class DeepMCTSPlayer(Player):
         self.game = game
         self.simulations = simulations
         self.nn = nn
-        self.tree = MCTS(game, nn)
+        self.tree = MCTS(game, nn, add_noise=False)
 
     def update_state(self, s):
         for _ in range(self.simulations):

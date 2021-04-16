@@ -113,9 +113,15 @@ class NeuralNetwork():
         self.model.load_state_dict(network_checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(network_checkpoint['optimizer_state_dict'])
         if load_supplementary_data:
-            data_path = "{}/training.data".format(directory)
-            data_checkpoint = torch.load(data_path)
-            return data_checkpoint['training_data'], network_checkpoint['error_log']
+            #file could be broken cause of killing the process
+            try:
+                data_path = "{}/training.data".format(directory)
+                data_checkpoint = torch.load(data_path)
+            except:
+                pass
+            else:
+                return data_checkpoint['training_data'], network_checkpoint['error_log']
+        return None, None
 
 
     # Utility function for listing all available model checkpoints.

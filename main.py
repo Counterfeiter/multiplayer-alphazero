@@ -36,7 +36,11 @@ if config["resume"]:
         print("No existing checkpoints to resume.")
         quit()
     iteration = int(checkpoints[-1])
-    trainer.training_data, trainer.error_log = nn.load(iteration, load_supplementary_data=True)
+    train_data, errorlog = nn.load(iteration, load_supplementary_data=True)
+    # if you kill the training process at a bad moment, you could corrupt the training data file
+    # if it is not present or corrupt skip loading
+    if train_data is not None:
+        trainer.training_data, trainer.error_log = train_data, errorlog
 else:
     if len(checkpoints) != 0:
         print("Please delete the existing checkpoints for this game+model combination, or change resume flag to True.")
@@ -46,19 +50,26 @@ else:
 # Training loop
 while True:
 
-    # Run multiple policy iterations to develop a checkpoint.
-    for _ in range(config["ckpt_frequency"]):
-        if config["verbose"]: print("Iteration:",iteration)
-        trainer.policy_iteration(verbose=config["verbose"]) # One iteration of PI
-        iteration += 1
-        if config["verbose"]: print("Training examples:", len(trainer.training_data))
-    
-    # Save checkpoint
-    nn.save(name=iteration, training_data=trainer.training_data, error_log=trainer.error_log)
+    if len(sys.argv) <=2 or sys.argv[2] != 'eval':
+        # Run multiple policy iterations to develop a checkpoint.
+        for _ in range(config["ckpt_frequency"]):
+            if config["verbose"]: print("Iteration:",iteration)
+            trainer.policy_iteration(verbose=config["verbose"]) # One iteration of PI
+            iteration += 1
+            if config["verbose"]: print("Training examples:", len(trainer.training_data))
+        
+        # Save checkpoint
+        nn.save(name=iteration, training_data=trainer.training_data, error_log=trainer.error_log)
 
     # Evaluate how the current checkpoint performs against MCTS agents of increasing strength
     # that do no use a heursitic.
     print("Evaluate current checkpoint")
-    for opponent_strength in [10, 20, 40, 80]:
+    #check simulations are overwritten
+    if len(sys.argv) >= 4 and sys.argv[2] == 'eval':
+        try:
+            sims = int(sys.argv[3])
+        except:
+            pass
+    for opponent_strength in [10, 20]:#, 40, 80]:
         evaluate_against_uninformed(checkpoint=iteration, game=game, model_class=model_class,
             my_sims=sims, opponent_sims=opponent_strength, cuda=cuda)
