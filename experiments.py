@@ -3,12 +3,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from models.senet import SENet
+from models.convnet import ConvNet
 from neural_network import NeuralNetwork
 from games.tictactoe import TicTacToe
+from games.kingdombuilder import AZKingdomBuilder as KingdomBuilder
 from games.tictacmo import TicTacMo
 from players.deep_mcts_player import DeepMCTSPlayer
 from players.uninformed_mcts_player import UninformedMCTSPlayer
 from play import play_match
+from time import sleep
 
 
 # Evaluate the outcome of playing a checkpoint against an uninformed MCTS agent
@@ -21,14 +24,17 @@ def evaluate_against_uninformed(checkpoint, game, model_class, my_sims, opponent
     uninformeds = [UninformedMCTSPlayer(game, opponent_sims) for _ in range(num_opponents)]
     informed = DeepMCTSPlayer(game, my_model, my_sims)
     players = [informed] + uninformeds
-    verbose = False
+    verbose = True
+    game.visualize(s)
     while not game_over:
         p = game.get_player(s) # let the game decide start player and turn actions
-        if verbose: print("Player #{}'s turn.".format(p))
+        if verbose: print("Player #{}'s turn.".format(p+1))
         s = players[p].update_state(s)
         if verbose: game.visualize(s)
         game_over = game.check_game_over(s)
+    game.visualize(s)
     print("Opponent strength: {}     Scores: {}".format(opponent_sims, game.get_scores(s)))
+    sleep(3)
 
 
 # Tracks the current best checkpoint across all checkpoints
@@ -108,7 +114,7 @@ def plot_train_loss(game, model_classes, cudas):
     min_len = None
     for cuda, model_class in zip(cudas, model_classes):
         nn = NeuralNetwork(game, model_class, cuda=cuda)
-        ckpt = nn.list_checkpoints()[-1]
+        ckpt = nn.list_checkpoints("_first_restart_immi")[-1]
         _, error = nn.load(ckpt, load_supplementary_data=True)
         window = 1
         error = np.convolve(error, np.ones(window), mode="valid")/window
@@ -129,16 +135,16 @@ def plot_train_loss(game, model_classes, cudas):
 
 if __name__ == "__main__":
     checkpoint = 1
-    game = TicTacMo()
+    game = KingdomBuilder()
     model_class = SENet
     sims = 50
     cuda = True
     print("*** Rank Checkpoints ***")
-    rank_checkpoints(game, model_class, sims, cuda)
+    #rank_checkpoints(game, model_class, sims, cuda)
     print("*** One vs All ***")
-    one_vs_all(checkpoint, game, model_class, sims, cuda)
+    #one_vs_all(checkpoint, game, model_class, sims, cuda)
     print("*** Effective Model Power ***")
-    effective_model_power(checkpoint, game, model_class, sims, cuda)
+    #effective_model_power(checkpoint, game, model_class, sims, cuda)
     print("*** Train Loss Plot ***")
     plot_train_loss(game, [model_class], [cuda])
 

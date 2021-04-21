@@ -2,6 +2,7 @@ import time
 import numpy as np
 from multiprocessing.dummy import Pool as ThreadPool
 from mcts import MCTS
+from mcts_ray import MCTS as MCTSRAY, Node, RootParentNode
 from play import play_match
 from players.uninformed_mcts_player import UninformedMCTSPlayer
 from players.deep_mcts_player import DeepMCTSPlayer
@@ -65,11 +66,64 @@ class Trainer:
 
         return np.array(data, dtype=np.object)
 
+    def self_play_ray(self, temperature, nn):
+        mcts_config = {
+            "puct_coefficient": 3.0,
+            "num_simulations": 30,
+            "temperature": 1.5,
+            "dirichlet_epsilon": 0.25,
+            "dirichlet_noise": 0.03,
+            "argmax_tree_policy": False,
+            "add_dirichlet_noise": True,
+        }
+        s = self.game.get_initial_state()
+        tree = MCTSRAY(nn, mcts_config)
+
+        done = self.game.check_game_over(s)
+
+        tree_node = Node(
+                        state=s,
+                        obs=s["obs"],
+                        reward=0,
+                        done=done,
+                        action=None,
+                        parent=RootParentNode(env=self.game, state=s),
+                        mcts=tree)
+
+        data = []
+        
+        while not done:
+            
+            available = self.game.get_available_actions(s)
+
+            # Think
+            p, action, tree_node = tree.compute_action(tree_node)
+
+            p = nn.get_valid_dist(p, available).cpu().numpy().squeeze()
+
+            data.append([s["obs"], p, None, available]) # state, prob, outcome, action_mask
+
+            # Apply action
+            template = np.zeros_like(available)
+            template[action] = 1
+            s = self.game.take_action(s, template)
+
+            # Check scores
+            done = self.game.check_game_over(s)
+
+
+        scores = self.game.get_scores(s)
+
+        # Update training examples with outcome
+        for i, _ in enumerate(data):
+            data[i][2] = scores
+
+        return np.array(data, dtype=np.object)
 
     # Performs one iteration of policy improvement.
     # Creates some number of games, then updates network parameters some number of times from that training data.
     def policy_iteration(self, verbose=False):
-        temperature = 1.0
+        temperature = 3.0
 
         if verbose:
             print("SIMULATING " + str(self.num_games) + " games")
@@ -77,13 +131,14 @@ class Trainer:
         if self.num_threads > 1:
             jobs = [(temperature, self.nn)]*self.num_games
             pool = ThreadPool(self.num_threads)
-            new_data = pool.map(self.self_play, jobs)
+            new_data = pool.map(self.self_play_ray, jobs)
             pool.close()
             pool.join()
             self.training_data = np.concatenate([self.training_data] + new_data, axis=0)
         else:
             for _ in range(self.num_games): # Self-play games
-                new_data = self.self_play(temperature, self.nn)
+                #new_data = self.self_play(temperature, self.nn)
+                new_data = self.self_play_ray(temperature, self.nn)
                 self.training_data = np.concatenate([self.training_data, new_data], axis=0)
         if verbose:
             print("Simulating took " + str(int(time.time()-start)) + " seconds")

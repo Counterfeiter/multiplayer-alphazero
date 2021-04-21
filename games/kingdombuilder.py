@@ -15,8 +15,8 @@ class AZKingdomBuilder(Game):
     # There are extra layers to represent X and O pieces, as well as a turn indicator layer.
     def get_initial_state(self, **kwargs):
         #level = 'easy'
-        #level = 'intermediate'
-        level = 'professional'
+        level = 'intermediate'
+        #level = 'professional'
         train = True
         if 'train' in kwargs:
             train = kwargs['train']
@@ -46,9 +46,12 @@ class AZKingdomBuilder(Game):
     # if you have a game where the winner is unknown until the game is done
     # return None until game is done
     def get_scores(self, s):
-        score = s["env"].game.rules.score(s["env"].game.players)
+
         if s["env"].done:
+            score = s["env"].game.rules.score(s["env"].game.players)
             print("Game ends with score:" , score)
+        else:
+            return None
         rew = -np.ones(self.get_num_players())
         #consider multiple winner
         #for winner in np.argwhere(score == np.amax(score)).flatten():
@@ -72,11 +75,11 @@ class AZKingdomBuilder(Game):
 
     # Fixed constant for max players
     def get_num_players(self):
-        return 5
+        return 4
 
     # Print a human-friendly visualization of the board.
     def visualize(self, s):
-        print(s["env"].game.board)
+        s["env"].render()
 
     def get_hash(self, s):
         return  hash(str(s["env"].game.main_move).encode("ascii") + \

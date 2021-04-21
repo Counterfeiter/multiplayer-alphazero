@@ -3,6 +3,7 @@ import sys
 import numpy as np
 
 from models.senet import SENet
+from models.convnet import ConvNet
 from models.senetbig import SENetBig
 from games.tictactoe import TicTacToe
 from games.tictacmo import TicTacMo

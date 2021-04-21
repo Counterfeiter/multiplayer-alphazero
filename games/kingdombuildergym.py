@@ -147,7 +147,6 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
             self.done = True
 
         self.calcmask()
-        self.running_reward += reward
 
         self.dynamic_obs = self._extract_observations()
 
@@ -157,7 +156,7 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
             "obs": np.concatenate( (self.dynamic_obs, self.fixed_obs), axis=2)
         }
 
-        return dict_obs, self.running_reward if self.done else 0, self.done, {}
+        return dict_obs, reward, self.done, {}
 
     def reset(self):
 
@@ -200,5 +199,4 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
     def render(self, mode='human', close=False):
         if mode == 'human':
             print("Player {:s} with Terrain {:s} and towns to play: ".format(str(self.game.player), self.game.player.card.name), self.game.townstoplay)
-            print("\nRule Cards: {:^16}{:^16}{:^16}{:^16}\n".format(*[x.name for x in self.game.rules.rules]))
-            print(self.game.board)
+            print(self.game)

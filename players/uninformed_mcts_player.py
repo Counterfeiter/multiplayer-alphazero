@@ -4,6 +4,7 @@ sys.path.append("..")
 from mcts import MCTS
 from player import Player
 from models.dumbnet import DumbNet
+from mcts_ray import MCTS as MCTSRAY, Node, RootParentNode
 from neural_network import NeuralNetwork
 
 class UninformedMCTSPlayer(Player):
@@ -11,19 +12,40 @@ class UninformedMCTSPlayer(Player):
     def __init__(self, game, simulations):
         self.game = game
         self.simulations = simulations
-        self.tree = MCTS(game, NeuralNetwork(game, DumbNet), add_noise=False)
+        #self.tree = MCTS(game, NeuralNetwork(game, DumbNet), add_noise=False)
+        self.mcts_config = {
+            "puct_coefficient": 3.0,
+            "num_simulations": 20,
+            "temperature": 1.5,
+            "dirichlet_epsilon": 0.25,
+            "dirichlet_noise": 0.03,
+            "argmax_tree_policy": True,
+            "add_dirichlet_noise": False,
+        }
+        self.reset()
+
+
 
     def update_state(self, s):
-        for _ in range(self.simulations):
-            self.tree.simulate(s)
+        #if self.tree_node is None:
+        #generate root node
+        self.tree_node = Node(
+            state=s,
+            obs=s["obs"],
+            reward=0,
+            done=False,
+            action=None,
+            parent=RootParentNode(env=self.game, state=s),
+            mcts=self.tree)
 
-        dist = self.tree.get_distribution(s, 0)
-        a = tuple(dist[np.argmax(dist[:,1]),0])
+        # Think
+        p, action, self.tree_node = self.tree.compute_action(self.tree_node)
         available = self.game.get_available_actions(s)
         template = np.zeros_like(available)
-        template[a] = 1
+        template[action] = 1
         s_prime = self.game.take_action(s, template)
         return s_prime
 
     def reset(self):
-        self.tree = MCTS(self.game, NeuralNetwork(self.game, DumbNet))
+        self.tree_node = None
+        self.tree = MCTSRAY(NeuralNetwork(self.game, DumbNet), self.mcts_config)

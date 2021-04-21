@@ -39,38 +39,49 @@ class MCTS():
         hashed_s = self.np_hash(s) # Key for state in dictionary
         current_player = self.game.get_player(s)
         if hashed_s in self.tree: # Not at leaf; select.
-            #print("select")
+            print("select env step: ", s["env"].step_cnt)
             stats = self.tree[hashed_s]
             N, Q, P = stats["obs"][:,MCTS_STOAGE_INDEX_N], stats["obs"][:,MCTS_STOAGE_INDEX_Q], stats["obs"][:,MCTS_STOAGE_INDEX_P]
             U = cpuct*P*math.sqrt(N.sum() + (1e-6 if epsilon_fix else 0))/(1 + N)
             heuristic = Q + U
             best_a_idx = np.argmax(heuristic)
             best_a = stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_BESTACTION] # Pick best action to take
-            template = np.zeros_like(self.game.get_available_actions(s)) # Submit action to get s'
-            template[tuple(best_a)] = True
-            s_prime = self.game.take_action(s, template)
-            hs_prime = self.np_hash(s_prime)
-            # recursion is not always bad in all games...
-            # maybe in your game you have to pull a new card from stack 
-            # or roll a dice until you have a specific value...
-            # action masking will consider for correct gameplay
-            if hs_prime == hashed_s:
-                print("Recursion detected with action: ", best_a)
-            scores = self.simulate(s_prime) # Forward simulate with this action
+            if 0:#"child" in stats and best_a[0] in stats["child"]:
+                print("Step was taken before: ", best_a)
+                print("Child ", stats["child"])
+                scores = self.simulate(self.tree[stats["child"][best_a[0]]])
+            else:
+                template = np.zeros_like(self.game.get_available_actions(s)) # Submit action to get s'
+                template[tuple(best_a)] = True
+                s_prime = self.game.take_action(s, template)
+                hs_prime = self.np_hash(s_prime)
+
+                # recursion is not always bad in all games...
+                # maybe in your game you have to pull a new card from stack 
+                # or roll a dice until you have a specific value...
+                # action masking will consider for correct gameplay
+                if hs_prime == hashed_s:
+                    print("Recursion detected with action: ", best_a)
+                    if hs_prime in self.tree:
+                        print("Step was taken before: ", best_a)
+                scores = self.simulate(s_prime) # Forward simulate with this action
             n, q = N[best_a_idx], Q[best_a_idx]
             v = scores[current_player] # Index in to find our reward
             stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_Q] = (n*q+v)/(n + 1)
             stats["obs"][best_a_idx, MCTS_STOAGE_INDEX_N] += 1
+            stats["child"] = {best_a[0]:hs_prime}
             return scores
 
         else: # Expand
-            #print("expand")
+            print("expand env step: ", s["env"].step_cnt)
             if self.game.check_game_over(s): # Reached a terminal node
                 score = self.game.get_scores(s)
                 return score
             available_actions = self.game.get_available_actions(s)
             idx = np.stack(np.where(available_actions)).T
-            p, v = self.nn.predict(s)
+            print("s", s["obs"].shape)
+            p, v = self.nn.predict(s, available_actions)
+            print("p", p.shape, "v",v.shape)
             ### TODO: settings to config file
             if self.add_noise:
                 alpha = 0.03

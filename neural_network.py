@@ -40,15 +40,24 @@ class NeuralNetwork():
 
 
     # Given a single state s, does inference to produce a distribution of valid moves P and a value V.
-    def predict(self, s):
+    def predict(self, state, action_mask):
         self.model.eval()
-        input_s = np.array([s["obs"]])
+        input_s = np.array([state["obs"]], dtype=np.float32)
         with torch.no_grad():
             input_s = torch.from_numpy(input_s)
             p_logits, v = self.model(input_s)
-            action_mask = self.game.get_available_actions(s)
-            p, v = self.get_valid_dist(s, p_logits[0], action_mask).cpu().numpy().squeeze(), v.cpu().numpy().squeeze() # EXP because log softmax
+            p, v = self.get_valid_dist(p_logits[0], action_mask).cpu().numpy().squeeze(), v.cpu().numpy().squeeze() # EXP because log softmax
         return p, v
+
+    # Given a single state s, does inference to produce a distribution of valid moves P and a value V.
+    def predict_ray(self, obs, action_mask):
+        self.model.eval()
+        input_s = np.array([obs], dtype=np.float32)
+        with torch.no_grad():
+            input_s = torch.from_numpy(input_s)
+            p_logits, v = self.model(input_s)
+            dist = torch.nn.functional.log_softmax(p_logits, dim=-1)
+        return torch.exp(p_logits).cpu().numpy().squeeze(), v.cpu().numpy().squeeze()
 
 
     # MSE + Cross entropy
@@ -67,13 +76,17 @@ class NeuralNetwork():
                 gt = gt.cuda()
             s = states[i]
             logits = p_pred[i]
-            pred = self.get_valid_dist(s, logits, action_mask[i], log_softmax=True)
+            pred = self.get_valid_dist(logits, action_mask[i], log_softmax=True)
             p_loss += -torch.sum(gt*pred)
         return p_loss + v_loss
 
 
     # Takes one state and logit set as input, produces a softmax/log_softmax over the valid actions.
-    def get_valid_dist(self, s, logits, action_mask, log_softmax=False):
+    def get_valid_dist(self, logits, action_mask, log_softmax=False):
+        if type(logits) == np.ndarray:
+            logits = torch.from_numpy(logits)
+            if self.cuda:
+                logits = logits.cuda()
         mask = torch.from_numpy(action_mask)
         if self.cuda:
             mask = mask.cuda()
@@ -125,9 +138,9 @@ class NeuralNetwork():
 
 
     # Utility function for listing all available model checkpoints.
-    def list_checkpoints(self):
+    def list_checkpoints(self, suffix_str = ""):
         network_name = self.model.module.__class__.__name__ if self.cuda else self.model.__class__.__name__
-        path = "checkpoints/{}-{}/".format(self.game.__class__.__name__, network_name)
+        path = "checkpoints/{}-{}{}/".format(self.game.__class__.__name__, network_name,suffix_str)
         if  not os.path.isdir(path):
             return []
         return sorted([int(filename.split(".ckpt")[0]) for filename in os.listdir(path) if filename.endswith(".ckpt")])
