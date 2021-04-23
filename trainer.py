@@ -69,7 +69,7 @@ class Trainer:
     def self_play_ray(self, temperature, nn):
         mcts_config = {
             "puct_coefficient": 3.0,
-            "num_simulations": 30,
+            "num_simulations": self.num_simulations,
             "temperature": 1.5,
             "dirichlet_epsilon": 0.25,
             "dirichlet_noise": 0.03,
@@ -113,6 +113,7 @@ class Trainer:
 
 
         scores = self.game.get_scores(s)
+        scores = np.append(scores, self.game.get_current_players(s))
 
         # Update training examples with outcome
         for i, _ in enumerate(data):

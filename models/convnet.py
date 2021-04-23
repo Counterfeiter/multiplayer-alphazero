@@ -25,7 +25,9 @@ class ConvNet(Model):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             nn.Flatten(),
-            nn.Linear(7744, feature_dim))
+            nn.Linear(7744, feature_dim),
+            nn.ReLU(),
+            )
 
         self.p_head = nn.Linear(feature_dim, np.prod(p_shape))
         self.v_head = nn.Linear(feature_dim, np.prod(v_shape))

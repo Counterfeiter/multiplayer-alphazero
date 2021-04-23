@@ -99,6 +99,9 @@ class Node:
                 done=self.env.check_game_over(next_state),
                 obs=next_state["obs"],
                 mcts=self.mcts)
+            
+            #store reference to the node
+            self.mcts.lockup_table = { self.env.get_hash(next_state) : self.children[action] }
         return self.children[action]
 
     def backup(self, value):
@@ -130,6 +133,8 @@ class MCTS:
         self.exploit = mcts_param["argmax_tree_policy"]
         self.add_dirichlet_noise = mcts_param["add_dirichlet_noise"]
         self.c_puct = mcts_param["puct_coefficient"]
+
+        self.lockup_table = {}
 
     def compute_action(self, node):
         for _ in range(self.num_sims):

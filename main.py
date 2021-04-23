@@ -10,6 +10,8 @@ from games.tictacmo import TicTacMo
 from games.kingdombuilder import AZKingdomBuilder as KingdomBuilder
 from games.connect3x3 import Connect3x3
 from neural_network import NeuralNetwork
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 from trainer import Trainer
 from experiments import evaluate_against_uninformed
 
@@ -23,8 +25,10 @@ game = globals()[config["game"]]()
 model_class = globals()[config["model"]]
 sims = config["num_simulations"]
 cuda = config["cuda"]
+writer = SummaryWriter(log_dir="tensorboard/{:s}_{}-{}".format(datetime.now().strftime("%d.%m.%Y, %H:%M:%S"), config["game"], config["model"]))
 nn = NeuralNetwork(game=game, model_class=model_class, lr=config["lr"],
-    weight_decay=config["weight_decay"], batch_size=config["batch_size"], cuda=cuda)
+    weight_decay=config["weight_decay"], batch_size=config["batch_size"], cuda=cuda, writer=writer)
+
 trainer = Trainer(game=game, nn=nn, num_simulations=sims,
 num_games=config["num_games"], num_updates=config["num_updates"], 
 buffer_size_limit=config["buffer_size_limit"], cpuct=config["cpuct"],

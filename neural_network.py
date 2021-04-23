@@ -1,11 +1,12 @@
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import os
 
 # Object that manages interfacing data with the underlying PyTorch model, as well as checkpointing models.
 class NeuralNetwork():
 
-    def __init__(self, game, model_class, lr=1e-3, weight_decay=1e-8, batch_size=64, cuda=False):
+    def __init__(self, game, model_class, lr=1e-3, weight_decay=1e-8, batch_size=64, cuda=False, writer = None):
         self.game = game
         self.batch_size = batch_size
         init_state = game.get_initial_state()
@@ -20,6 +21,13 @@ class NeuralNetwork():
         if len(list(self.model.parameters())) > 0:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
 
+        network_name = self.model.module.__class__.__name__ if self.cuda else self.model.__class__.__name__
+        name = "{}-{}".format(self.game.__class__.__name__, network_name)
+
+        self.writer = writer
+
+        self.epoche_cnt = 0
+
 
     # Incoming data is a numpy array containing (state, prob, outcome) tuples.
     def train(self, data):
@@ -32,8 +40,13 @@ class NeuralNetwork():
         x = torch.from_numpy(states)
         p_pred, v_pred = self.model(x)
         p_gt, v_gt = batch[:,1], np.stack(batch[:,2])
-        loss = self.loss(states, action_mask, (p_pred, v_pred), (p_gt, v_gt))
+        loss_p, loss_v = self.loss(states, action_mask, (p_pred, v_pred), (p_gt, v_gt))
+        self.epoche_cnt += 1
+        if self.writer is not None:
+            self.writer.add_scalar('Training/DataSamples', len(data), self.epoche_cnt)
         self.optimizer.zero_grad()
+        #loss = loss_p + loss_v
+        loss = loss_v
         loss.backward()
         self.optimizer.step()
         self.latest_loss = loss
@@ -68,9 +81,14 @@ class NeuralNetwork():
         v_gt = torch.from_numpy(v_gt.astype(np.float32))
         if self.cuda:
             v_gt = v_gt.cuda()
-        v_loss = ((v_pred - v_gt)**2).sum() # Mean squared error
+        v_loss = 0
         p_loss = 0
         for i in range(batch_size):
+            ### value loss
+            current_player_cnt = v_gt[i,-1].int()
+            v_loss += ((v_pred[i, :current_player_cnt] - v_gt[i, :current_player_cnt])**2).sum() # Mean squared error
+
+            ### policy loss
             gt = torch.from_numpy(p_gt[i].astype(np.float32))
             if self.cuda:
                 gt = gt.cuda()
@@ -78,7 +96,13 @@ class NeuralNetwork():
             logits = p_pred[i]
             pred = self.get_valid_dist(logits, action_mask[i], log_softmax=True)
             p_loss += -torch.sum(gt*pred)
-        return p_loss + v_loss
+
+        if self.writer is not None:
+            self.writer.add_scalar('Loss/policy', p_loss / batch_size, self.epoche_cnt)
+            self.writer.add_scalar('Loss/value', v_loss / batch_size, self.epoche_cnt)
+            losssum = (p_loss + v_loss) / batch_size
+            self.writer.add_scalar('Loss/sum', losssum, self.epoche_cnt)
+        return (p_loss / batch_size),  (v_loss / batch_size)
 
 
     # Takes one state and logit set as input, produces a softmax/log_softmax over the valid actions.

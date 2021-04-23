@@ -15,8 +15,8 @@ class AZKingdomBuilder(Game):
     # There are extra layers to represent X and O pieces, as well as a turn indicator layer.
     def get_initial_state(self, **kwargs):
         #level = 'easy'
-        level = 'intermediate'
-        #level = 'professional'
+        #level = 'intermediate'
+        level = 'professional'
         train = True
         if 'train' in kwargs:
             train = kwargs['train']
@@ -75,7 +75,7 @@ class AZKingdomBuilder(Game):
 
     # Fixed constant for max players
     def get_num_players(self):
-        return 4
+        return 5
 
     # Print a human-friendly visualization of the board.
     def visualize(self, s):

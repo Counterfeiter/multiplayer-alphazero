@@ -23,16 +23,21 @@ class DeepMCTSPlayer(Player):
         self.reset()
 
     def update_state(self, s):
-        #if self.tree_node is None:
-        #generate root node
-        self.tree_node = Node(
-            state=s,
-            obs=s["obs"],
-            reward=0,
-            done=False,
-            action=None,
-            parent=RootParentNode(env=self.game, state=s),
-            mcts=self.tree)
+        # maybe the game state is still in 
+        if self.tree is not None and self.game.get_hash(s) in self.tree.lockup_table:
+            self.tree_node = self.tree.lockup_table[self.game.get_hash(s)]
+            print("#### Happy while reloading a already searched state")
+        else:
+            #clear memory restart with mcts search
+            self.tree = MCTSRAY(self.nn, self.mcts_config)
+            self.tree_node = Node(
+                state=s,
+                obs=s["obs"],
+                reward=0,
+                done=False,
+                action=None,
+                parent=RootParentNode(env=self.game, state=s),
+                mcts=self.tree)
 
         # Think
         p, action, self.tree_node = self.tree.compute_action(self.tree_node)
@@ -43,5 +48,4 @@ class DeepMCTSPlayer(Player):
         return s_prime
 
     def reset(self):
-        self.tree_node = None
-        self.tree = MCTSRAY(self.nn, self.mcts_config)
+        self.tree = None

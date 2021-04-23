@@ -114,7 +114,7 @@ def plot_train_loss(game, model_classes, cudas):
     min_len = None
     for cuda, model_class in zip(cudas, model_classes):
         nn = NeuralNetwork(game, model_class, cuda=cuda)
-        ckpt = nn.list_checkpoints("_first_restart_immi")[-1]
+        ckpt = nn.list_checkpoints("")[-1]
         _, error = nn.load(ckpt, load_supplementary_data=True)
         window = 1
         error = np.convolve(error, np.ones(window), mode="valid")/window
@@ -136,7 +136,7 @@ def plot_train_loss(game, model_classes, cudas):
 if __name__ == "__main__":
     checkpoint = 1
     game = KingdomBuilder()
-    model_class = SENet
+    model_class = ConvNet
     sims = 50
     cuda = True
     print("*** Rank Checkpoints ***")
