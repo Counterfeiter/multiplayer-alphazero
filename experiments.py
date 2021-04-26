@@ -46,19 +46,22 @@ def rank_checkpoints(game, model_class, sims, cuda=False):
     current_winner = ckpts[0]
 
     for contender in ckpts:
+        overall_score = [0.0] * game.get_num_players()
+        for i in range(1, 11):
+            # Load contending player
+            contending_model.load(contender)
+            contending_player = DeepMCTSPlayer(game, contending_model, sims)
 
-        # Load contending player
-        contending_model.load(contender)
-        contending_player = DeepMCTSPlayer(game, contending_model, sims)
+            # Load winning player
+            winning_model.load(current_winner)
+            winners = [DeepMCTSPlayer(game, winning_model, sims) for _ in range(num_opponents)]
+            
+            scores = play_match(game, [contending_player] + winners, verbose=False, permute=False)
+            print("Current Champ: {}    Challenger: {}    <{}>    "
+                    .format(current_winner, contender, scores), end= "")
+            overall_score += scores
 
-        # Load winning player
-        winning_model.load(current_winner)
-        winners = [DeepMCTSPlayer(game, winning_model, sims) for _ in range(num_opponents)]
-        
-        scores = play_match(game, [contending_player] + winners, verbose=False, permute=True)
-        print("Current Champ: {}    Challenger: {}    <{}>    "
-                .format(current_winner, contender, scores), end= "")
-        if scores[0] >= scores.max():
+        if overall_score[0] >= overall_score.max():
             current_winner = contender
         print("New Champ: {}".format(current_winner))
 
@@ -140,12 +143,12 @@ if __name__ == "__main__":
     sims = 50
     cuda = True
     print("*** Rank Checkpoints ***")
-    #rank_checkpoints(game, model_class, sims, cuda)
+    rank_checkpoints(game, model_class, sims, cuda)
     print("*** One vs All ***")
     #one_vs_all(checkpoint, game, model_class, sims, cuda)
     print("*** Effective Model Power ***")
     #effective_model_power(checkpoint, game, model_class, sims, cuda)
     print("*** Train Loss Plot ***")
-    plot_train_loss(game, [model_class], [cuda])
+    #plot_train_loss(game, [model_class], [cuda])
 
 

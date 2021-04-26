@@ -44,6 +44,8 @@ if config["resume"]:
     train_data, errorlog = nn.load(iteration, load_supplementary_data=True)
     # if you kill the training process at a bad moment, you could corrupt the training data file
     # if it is not present or corrupt skip loading
+    nn.optimizer.param_groups[0]['lr'] = config["lr"]
+    #nn.optimizer.param_groups[0]['weight_decay'] = config["weight_decay"]
     if train_data is not None:
         trainer.training_data, trainer.error_log = train_data, errorlog
 else:
@@ -69,12 +71,21 @@ while True:
     # Evaluate how the current checkpoint performs against MCTS agents of increasing strength
     # that do no use a heursitic.
     print("Evaluate current checkpoint")
+    opponent_strength = 20
     #check simulations are overwritten
-    if len(sys.argv) >= 4 and sys.argv[2] == 'eval':
-        try:
-            sims = int(sys.argv[3])
-        except:
-            pass
-    for opponent_strength in [10, 20]:#, 40, 80]:
-        evaluate_against_uninformed(checkpoint=iteration, game=game, model_class=model_class,
-            my_sims=sims, opponent_sims=opponent_strength, cuda=cuda)
+    try:
+        if sys.argv[2] == 'eval':
+            try:
+                sims = int(sys.argv[3])
+            except:
+                pass
+
+            try:
+                opponent_strength = int(sys.argv[4])
+            except:
+                pass
+    except:
+        pass
+
+    evaluate_against_uninformed(checkpoint=iteration, game=game, model_class=model_class,
+        my_sims=sims, opponent_sims=opponent_strength, cuda=cuda)

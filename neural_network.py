@@ -19,7 +19,8 @@ class NeuralNetwork():
             self.model = self.model.to('cuda')
             self.model = torch.nn.DataParallel(self.model)
         if len(list(self.model.parameters())) > 0:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+            #self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
 
         network_name = self.model.module.__class__.__name__ if self.cuda else self.model.__class__.__name__
         name = "{}-{}".format(self.game.__class__.__name__, network_name)
@@ -31,6 +32,7 @@ class NeuralNetwork():
 
     # Incoming data is a numpy array containing (state, prob, outcome) tuples.
     def train(self, data):
+        loss_weight_v = 0.9
         self.model.train()
         batch_size=self.batch_size
         idx = np.random.randint(len(data), size=batch_size)
@@ -45,8 +47,8 @@ class NeuralNetwork():
         if self.writer is not None:
             self.writer.add_scalar('Training/DataSamples', len(data), self.epoche_cnt)
         self.optimizer.zero_grad()
-        #loss = loss_p + loss_v
-        loss = loss_v
+        loss = (loss_p * (1.0 - loss_weight_v)) + (loss_v * loss_weight_v)
+        self.writer.add_scalar('Loss/sum', loss, self.epoche_cnt)
         loss.backward()
         self.optimizer.step()
         self.latest_loss = loss
@@ -100,8 +102,6 @@ class NeuralNetwork():
         if self.writer is not None:
             self.writer.add_scalar('Loss/policy', p_loss / batch_size, self.epoche_cnt)
             self.writer.add_scalar('Loss/value', v_loss / batch_size, self.epoche_cnt)
-            losssum = (p_loss + v_loss) / batch_size
-            self.writer.add_scalar('Loss/sum', losssum, self.epoche_cnt)
         return (p_loss / batch_size),  (v_loss / batch_size)
 
 

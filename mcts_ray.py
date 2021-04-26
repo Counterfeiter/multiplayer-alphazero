@@ -4,7 +4,7 @@ https://github.com/brilee/python_uct/blob/master/numpy_impl.py
 """
 import collections
 import math
-
+import random
 import numpy as np
 
 

@@ -61,6 +61,12 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
         self.verbose = verbose
         self.reset()
 
+    def _town_to_boardsection(self, row, col):
+        if self.game.board.board_env[row][col] not in [SPECIALLOCATION.TOWNHALF.value, SPECIALLOCATION.TOWNFULL.value, SPECIALLOCATION.TOWNEMPTY.value]:
+            return None
+        ind = (row // 10) * 2  + (col // 10)
+        return BOARDSECTIONS[self.game.board.quadrant_order[ind]]
+
     def _extract_fixedobservations(self):
         obs = np.zeros(shape=(20, 20, self.terrains + self.rules + self.towns), dtype=np.float32)
         for row in range(20):
@@ -69,7 +75,7 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
                     obs[row,col,TERRAINANDSPECIAL[self.game.board.board_env[row][col]].value] = 1.0
                 towns_list = [SPECIALLOCATION.TOWNFULL.value, SPECIALLOCATION.TOWNHALF.value, SPECIALLOCATION.TOWNEMPTY.value]
                 if self.game.board.board_env[row][col] in towns_list:
-                    idx = self.game.board.town_to_boardsection(row, col).value
+                    idx = self._town_to_boardsection(row, col).value
                     obs[row,col,self.terrains + self.rules + idx] = 1.0
 
         for rule in self.game.rules.rules:
@@ -144,6 +150,7 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
             #    print("Action {:s} succeed with reward {:d}".format(DOACTION(actions[0]).name, reward))
 
         if self.game.done:
+            #print("Game done")
             self.done = True
 
         self.calcmask()
@@ -158,25 +165,30 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
 
         return dict_obs, reward, self.done, {}
 
-    def reset(self):
+    def reset(self, load_game : str = ""):
 
-        if self.level == 'easy':
-            fixed_quadrants = ["ORACLE", "PADDOCK", "HARBOR", "FARM"]
-            fixed_rules = [CARDRULES.MINERS, CARDRULES.FISHERMEN, CARDRULES.WORKER]
-            fixed_rot = [False] * 4
-            #only two players
-            self.game = Game(2, fixed_quadrants, fixed_rot, fixed_rules, deterministic = self.train_mode)
-        elif self.level == 'intermediate':
-            fixed_rules = [CARDRULES.MINERS, CARDRULES.FISHERMEN, CARDRULES.WORKER]
-            self.game = Game(4, deterministic = self.train_mode)
-        elif self.level == 'advanced':
-            fixed_quadrants = ["ORACLE", "PADDOCK", "HARBOR", "FARM"]
-            self.game = Game(3, fixed_quadrants, deterministic = self.train_mode)
-        elif self.level == 'professional':
-            #self.game = Game(4, deterministic = self.train_mode)
-            self.game = Game(random.randint(2, 5), deterministic = self.train_mode)
+        if load_game != "":
+            self.game = Game.load(load_game)
         else:
-            assert(False)
+            if self.level == 'easy':
+                fixed_quadrants = ["ORACLE", "PADDOCK", "HARBOR", "FARM"]
+                fixed_rules = [CARDRULES.MINERS, CARDRULES.FISHERMEN, CARDRULES.WORKER]
+                fixed_rot = [False] * 4
+                #only two players
+                self.game = Game(2, fixed_quadrants, fixed_rot, fixed_rules, deterministic = self.train_mode)
+            elif self.level == 'intermediate':
+                fixed_rules = [CARDRULES.MINERS, CARDRULES.FISHERMEN, CARDRULES.WORKER]
+                self.game = Game(4, deterministic = self.train_mode)
+            elif self.level == 'advanced':
+                fixed_quadrants = ["ORACLE", "PADDOCK", "HARBOR", "FARM"]
+                self.game = Game(3, fixed_quadrants, deterministic = self.train_mode)
+            elif self.level == 'professional':
+                #self.game = Game(4, deterministic = self.train_mode)
+                self.game = Game(random.randint(2, 5), deterministic = self.train_mode)
+            elif self.level == 'professional2player':
+                self.game = Game(2, deterministic = self.train_mode)
+            else:
+                assert(False)
 
         self.calcmask()
 

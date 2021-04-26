@@ -13,7 +13,7 @@ class DeepMCTSPlayer(Player):
         self.nn = nn
         self.mcts_config = {
             "puct_coefficient": 3.0,
-            "num_simulations": 20,
+            "num_simulations": simulations,
             "temperature": 1.5,
             "dirichlet_epsilon": 0.25,
             "dirichlet_noise": 0.03,

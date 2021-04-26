@@ -17,12 +17,16 @@ class AZKingdomBuilder(Game):
         #level = 'easy'
         #level = 'intermediate'
         level = 'professional'
+        #level = 'professional2player'
         train = True
         if 'train' in kwargs:
             train = kwargs['train']
         print("Game is in " + ("train state" if train else "evaluation state"))
         env = ParametricCNNKingdomBuilderEnv(level=level, normalize_obs=True, verbose=0, fail_actions=1, train=train)
-        obs = env.reset()
+        if 'loadgamefile' in kwargs:
+            obs = env.reset(kwargs['loadgamefile'])
+        else:
+            obs = env.reset()
         return {"env":env, "obs":obs["obs"]}
 
     # Returns a 3x5 boolean ndarray indicating open squares. 

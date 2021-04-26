@@ -24,43 +24,70 @@ def play_match(game, players, verbose=False, permute=False):
         if verbose: game.visualize(s)
         game_over = game.check_game_over(s)
 
-        while game_over is None:
+        while not game_over:
             p = order[game.get_player(s)]
             if verbose: print("Player #{}'s turn.".format(p))
             s = players[p].update_state(s)
             if verbose: game.visualize(s)
             game_over = game.check_game_over(s)
 
-        scores[list(order)] += game_over[:len(players)]
-        if verbose: print("Δ" + str(game_over[list(order)]) + ", Current scoreboard: " + str(scores))
+        scores[list(order)] += game.get_scores(s)
+        if verbose: print("Δ" + str(game.get_scores(s)) + ", Current scoreboard: " + str(scores))
 
 
     if verbose: print("Final scores:", scores)
     return scores
 
 
+def play_load_match(game, players, loadfile, verbose=False):
+
+    # Initialize scoreboard
+    scores = np.zeros(len(players))
+
+    s = game.get_initial_state(loadgamefile=loadfile, train = False)
+    if verbose: game.visualize(s)
+    game_over = game.check_game_over(s)
+
+    while not game_over:
+        p = game.get_player(s)
+        if verbose: print("Player #{}'s turn.".format(p))
+        s = players[p].update_state(s)
+        if verbose: game.visualize(s)
+        game_over = game.check_game_over(s)
+
+    game.get_scores(s)
+    if verbose: print("Δ" + str(game.get_scores(s)) + ", Current scoreboard: " + str(scores))
+
+
+    if verbose: print("Final scores:", scores)
+    return scores
+
 
 if __name__ == "__main__":
     from players.human_player import HumanPlayer
     from neural_network import NeuralNetwork
     from models.senet import SENet
+    from models.convnet import ConvNet
     from players.uninformed_mcts_player import UninformedMCTSPlayer
     from players.deep_mcts_player import DeepMCTSPlayer
     from games.tictactoe import TicTacToe
     from games.tictacmo import TicTacMo
+    from games.kingdombuilder import AZKingdomBuilder as KindgomBuilder
 
 
     # Change these variable 
-    game = TicTacMo()
-    #ckpt = 15
-    #nn = NeuralNetwork(game, SENet, cuda=True)
-    #nn.load(ckpt)
+    game = KindgomBuilder()
+    ckpt = 90
+    nn = NeuralNetwork(game, SENet, cuda=True)
+    nn.load(ckpt)
     
     # HumanPlayer(game),
     # UninformedMCTSPlayer(game, simulations=1000)
-    # DeepMCTSPlayer(game, nn, simulations=50)
+    opponents = [HumanPlayer(game) for _ in range(3)]
+    #opponents = [UninformedMCTSPlayer(game, simulations=500) for _ in range(3)]
+    ai = DeepMCTSPlayer(game, nn, simulations=1000)
+    #ai = UninformedMCTSPlayer(game, simulations=4000)
     
-    players = [HumanPlayer(game), HumanPlayer(game),UninformedMCTSPlayer(game, simulations=3000)]
-    for _ in range(1):
-        play_match(game, players, verbose=True, permute=True)
+    players = [ai] + opponents
+    play_load_match(game, players, "initalgame.ini", verbose=True)
     
