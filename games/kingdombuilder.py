@@ -51,11 +51,11 @@ class AZKingdomBuilder(Game):
     # return None until game is done
     def get_scores(self, s):
 
-        if s["env"].done:
-            score = s["env"].game.rules.score(s["env"].game.players)
-            print("Game ends with score:" , score)
-        else:
-            return None
+        # if s["env"].done:
+        score = s["env"].game.rules.score(s["env"].game.players)
+        #     print("Game ends with score:" , score)
+        # else:
+        #     return None
         rew = -np.ones(self.get_num_players())
         #consider multiple winner
         #for winner in np.argwhere(score == np.amax(score)).flatten():

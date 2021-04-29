@@ -1,4 +1,7 @@
 """
+### MCTS taken from ray alpha zero contribution ###
+
+
 Mcts implementation modified from
 https://github.com/brilee/python_uct/blob/master/numpy_impl.py
 """
@@ -20,6 +23,8 @@ class Node:
         self.valid_actions = self.env.get_available_actions(state)
         self.current_player = self.env.get_player(state)
         self.action_space_size = self.valid_actions.shape[0]
+        self.child_total_reward = np.zeros(
+            [self.action_space_size, self.env.get_num_players()], dtype=np.float32)  # Q
         self.child_total_value = np.zeros(
             [self.action_space_size, self.env.get_num_players()], dtype=np.float32)  # Q
         self.child_priors = np.zeros(
@@ -55,6 +60,19 @@ class Node:
             self.parent.child_total_value[self.action] = value
         else:
             self.parent.child_total_value[self.action] = value
+
+    @property
+    def total_reward(self):
+        if type(self.parent.child_total_reward) == collections.defaultdict:
+            return self.parent.child_total_reward[self.action]
+        return self.parent.child_total_reward[self.action]
+
+    @total_reward.setter
+    def total_reward(self, reward):
+        if type(self.parent.child_total_reward) == collections.defaultdict:
+            self.parent.child_total_reward[self.action] = reward
+        else:
+            self.parent.child_total_reward[self.action] = reward
 
     def child_Q(self):
         # TODO (weak todo) add "softmax" version of the Q-value
@@ -109,6 +127,7 @@ class Node:
         while current.parent is not None:
             current.number_visits += 1
             current.total_value += value
+            current.total_reward += self.reward
             current = current.parent
 
 
@@ -120,6 +139,7 @@ class RootParentNode:
         self.current_player = env.get_player(state)
         self.child_total_value = collections.defaultdict(float)
         self.child_number_visits = collections.defaultdict(float)
+        self.child_total_reward = collections.defaultdict(float)
         self.env = env
 
 
@@ -166,7 +186,8 @@ class MCTS:
         if self.exploit:
             # if exploit then choose action that has the maximum
             # tree policy probability
-            action = np.argmax(tree_policy)
+            action = np.random.choice(np.flatnonzero(tree_policy == tree_policy.max()))
+            #action = np.argmax(tree_policy)
 
             if node.valid_actions[action] == False:
                 print("This action is not avalibale (rand in game flow) -> start search again")

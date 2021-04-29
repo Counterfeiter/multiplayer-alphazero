@@ -19,8 +19,8 @@ class NeuralNetwork():
             self.model = self.model.to('cuda')
             self.model = torch.nn.DataParallel(self.model)
         if len(list(self.model.parameters())) > 0:
-            #self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+            #self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
 
         network_name = self.model.module.__class__.__name__ if self.cuda else self.model.__class__.__name__
         name = "{}-{}".format(self.game.__class__.__name__, network_name)

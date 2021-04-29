@@ -31,6 +31,7 @@ class TERRAINANDSPECIAL(Enum):
 
 class ParametricCNNKingdomBuilderEnv(gym.Env):
     max_avail_actions = 2802 + 5 * 400
+    #max_avail_actions = len(DOACTION) + 20*20
 
     max_player = 5 # player settlements if placed = 1.0
     # kingdom builder is a game where each settlements part of the reward or gold could be calulated
@@ -39,10 +40,11 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
 
     # informations fixed... could be calc if game starts
     terrains = len(TERRAINANDSPECIAL) # each terrain gets his own channel
+    current_card = len(TERRAIN)
     towns = len(BOARDSECTIONS)
     rules = len(CARDRULES) # cardrules one per layer, if rule is used, set whole layer to one
 
-    CNN_layer = max_player + players_turn + terrains + rules + towns
+    CNN_layer = terrains + players_turn + rules + towns
 
     observation_space = Dict({
         "action_mask": Box(0, 1, shape=(max_avail_actions, )),
@@ -68,34 +70,37 @@ class ParametricCNNKingdomBuilderEnv(gym.Env):
         return BOARDSECTIONS[self.game.board.quadrant_order[ind]]
 
     def _extract_fixedobservations(self):
-        obs = np.zeros(shape=(20, 20, self.terrains + self.rules + self.towns), dtype=np.float32)
+        towns_list = [SPECIALLOCATION.TOWNFULL.value, SPECIALLOCATION.TOWNHALF.value, SPECIALLOCATION.TOWNEMPTY.value]
+        obs = np.zeros(shape=(20, 20, self.rules + self.towns), dtype=np.float32)
         for row in range(20):
             for col in range(20):
-                if self.game.board.board_env[row][col] in [e.name for e in TERRAINANDSPECIAL]:
-                    obs[row,col,TERRAINANDSPECIAL[self.game.board.board_env[row][col]].value] = 1.0
-                towns_list = [SPECIALLOCATION.TOWNFULL.value, SPECIALLOCATION.TOWNHALF.value, SPECIALLOCATION.TOWNEMPTY.value]
                 if self.game.board.board_env[row][col] in towns_list:
                     idx = self._town_to_boardsection(row, col).value
-                    obs[row,col,self.terrains + self.rules + idx] = 1.0
+                    obs[row,col,self.rules + idx] = 1.0
 
         for rule in self.game.rules.rules:
-            obs[:,:,self.terrains + rule.value] = 1.0
+            obs[:,:,rule.value] = 1.0
 
         return obs
 
     def _extract_observations(self):
-        obs = np.zeros(shape=(20, 20, self.max_player + self.players_turn), dtype=np.float32)
+        obs = np.zeros(shape=(20, 20, self.terrains + self.players_turn), dtype=np.float32)
         for row in range(20):
             for col in range(20):
-                if int(self.game.board.board_settlements[row][col]) != 0:
-                    obs[row, col, int(self.game.board.board_settlements[row][col]) - 1] = 1.0
-            
-        for player in self.game.players:
-            if player == self.game.player:
-                obs[:,:,self.max_player + int(player) - 1] = 1.0
-            else:
-                obs[:,:,self.max_player + int(player) - 1] = 0.5
-            
+                #terrains
+                if self.game.board.board_env[row][col] in [e.name for e in TERRAINANDSPECIAL]:
+                    if self.game.board.board_env[row][col] == self.game.player.card.value:
+                        obs[row,col,TERRAINANDSPECIAL[self.game.board.board_env[row][col]].value] = 0.5
+                    else:
+                        obs[row,col,TERRAINANDSPECIAL[self.game.board.board_env[row][col]].value] = 1.0
+
+                # check player settlements and turn indication
+                player_settle = int(self.game.board.board_settlements[row][col])
+                if player_settle != 0:
+                    if player_settle == int(self.game.player):
+                        obs[row, col, player_settle - 1] = 1.0 # player has settlements and players turn
+                    else:
+                        obs[row, col, player_settle - 1] = 0.5 # player has settlements 
         return obs
 
     def calcmask(self):
