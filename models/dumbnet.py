@@ -9,7 +9,7 @@ class DumbNet(Model):
 
 
   def forward(self, x):
-    batch_size = len(x)
+    batch_size = len(x["cnn_input"])
     this_p_shape = tuple([batch_size] + list(self.p_shape))
     this_v_shape = tuple([batch_size] + list(self.v_shape))
 

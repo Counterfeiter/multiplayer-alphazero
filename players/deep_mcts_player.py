@@ -12,7 +12,7 @@ class DeepMCTSPlayer(Player):
         self.simulations = simulations
         self.nn = nn
         self.mcts_config = {
-            "puct_coefficient": 0.1,
+            "puct_coefficient": 3.0,
             "num_simulations": simulations,
             "temperature": 1.5,
             "dirichlet_epsilon": 0.25,
@@ -29,10 +29,9 @@ class DeepMCTSPlayer(Player):
             print("#### Happy while reloading a already searched state")
         else:
             #clear memory restart with mcts search
-            self.tree = MCTSRAY(self.nn, self.mcts_config)
+            self.tree = MCTSRAY(self.nn, self.mcts_config, record_score = True)
             self.tree_node = Node(
                 state=s,
-                obs=s["obs"],
                 reward=0,
                 done=False,
                 action=None,
@@ -40,18 +39,25 @@ class DeepMCTSPlayer(Player):
                 mcts=self.tree)
 
         # Think
-        p, action, next_node = self.tree.compute_action(self.tree_node)
+        p, action, next_nodes = self.tree.compute_action(self.tree_node)
         i = 0
-        for key, value in self.tree_node.children.items():
-            i += 1
-            print("Visit child action {}! visits: {} value: {} score: {}".format(key, value.number_visits, value.total_value / value.number_visits, value.total_reward / value.number_visits))
+        for key, nodes in self.tree_node.children.items():
+            for value in nodes:
+                i += 1
+                print("Visit child action {}! visits: {} value: {} score: {}".format(key, value.number_visits, value.total_value / value.number_visits, value.total_reward / value.number_visits))
 
-        self.tree_node = next_node
+        self.tree_node = next_nodes
 
         available = self.game.get_available_actions(s)
         template = np.zeros_like(available)
         template[action] = 1
         s_prime = self.game.take_action(s, template)
+
+        for node in next_nodes:
+            if s_prime["env"].game.gamestate_to_dict() == node.state["env"].game.gamestate_to_dict():
+                self.tree_node = node
+                break
+
         return s_prime
 
     def reset(self):

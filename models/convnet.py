@@ -7,10 +7,10 @@ sys.path.append("..")
 from model import Model
 
 class ConvNet(Model):
-    def __init__(self, input_shape, p_shape, v_shape, block=None, num_blocks=None):
-        super(ConvNet, self).__init__(input_shape, p_shape, v_shape)
+    def __init__(self, input, p_shape, v_shape, block=None, num_blocks=None):
+        super(ConvNet, self).__init__(input, p_shape, v_shape)
 
-        in_channels = input_shape[-1]
+        in_channels = input["cnn_input"].shape[-1]
         feature_dim = 2048
 
         self.shared_layers = nn.Sequential(
@@ -25,14 +25,15 @@ class ConvNet(Model):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             nn.Flatten(),
-            nn.Linear(7744, feature_dim),
+            nn.Linear(14784, feature_dim),
             nn.ReLU(),
             )
 
         self.p_head = nn.Linear(feature_dim, np.prod(p_shape))
         self.v_head = nn.Linear(feature_dim, np.prod(v_shape))
 
-    def forward(self, x):
+    def forward(self, input_dict):
+        x = input_dict["cnn_input"]
         batch_size = len(x)
         this_p_shape = tuple([batch_size] + list(self.p_shape))
         this_v_shape = tuple([batch_size] + list(self.v_shape))

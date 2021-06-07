@@ -16,7 +16,7 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != planes:
+        if stride != 1 or in_planes != planes: 
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes)
@@ -76,9 +76,9 @@ class PreActBlock(nn.Module):
         return out
 
 
-class SENetBig(Model):
+class SENetMixed(Model):
     def __init__(self, input, p_shape, v_shape, block=PreActBlock, num_blocks=[3,4,6,3]):
-        super(SENetBig, self).__init__(input, p_shape, v_shape)
+        super(SENetMixed, self).__init__(input, p_shape, v_shape)
 
         self.in_planes = 64
         self.conv1 = nn.Conv2d(input["cnn_input"].shape[-1], 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -88,10 +88,30 @@ class SENetBig(Model):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
 
-        self.p_head = torch.nn.Linear(512, np.prod(p_shape))
-        self.v_head = torch.nn.Linear(512, np.prod(v_shape))
-
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.parallel_linear = nn.Sequential(
+            nn.Linear(input["ff_input"].shape[0], input["ff_input"].shape[0] * 2),
+            #nn.ReLU()
+        )
+
+        self.linear = nn.Sequential(
+            nn.Linear(512 + input["ff_input"].shape[0] * 2, 1024),
+            #nn.ReLU()
+        )
+
+        self.p_head = nn.Sequential(
+            nn.Linear(1024, np.prod(p_shape))
+        )
+
+        self.v_head = nn.Sequential(
+            nn.Linear(1024, np.prod(v_shape))
+        )
+
+        #self.p_head = torch.nn.Linear(512, np.prod(p_shape))
+        #self.v_head = torch.nn.Linear(512, np.prod(v_shape))
+
+
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -115,9 +135,12 @@ class SENetBig(Model):
         out = self.layer4(out)
         out = self.avgpool(out)
         flat = out.view(out.size(0), -1)
-        
+
+        ff_out = self.parallel_linear(input_dict["ff_input"])
+
+        flat = self.linear(torch.cat((flat, ff_out), -1))
+
         p_logits = self.p_head(flat).view(this_p_shape)
         v = torch.tanh(self.v_head(flat).view(this_v_shape))
         
         return p_logits, v
-

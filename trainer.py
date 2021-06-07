@@ -6,11 +6,12 @@ from mcts_ray import MCTS as MCTSRAY, Node, RootParentNode
 from play import play_match
 from players.uninformed_mcts_player import UninformedMCTSPlayer
 from players.deep_mcts_player import DeepMCTSPlayer
+from kingdombuilder import CARDRULES
 
 # Object that coordinates AlphaZero training.
 class Trainer:
 
-    def __init__(self, game, nn, num_simulations, num_games, num_updates, buffer_size_limit, cpuct, num_threads):
+    def __init__(self, game, nn, num_simulations, num_games, num_updates, buffer_size_limit, cpuct, num_threads, writer):
         self.game = game
         self.nn = nn
         self.num_simulations = num_simulations
@@ -21,6 +22,9 @@ class Trainer:
         self.cpuct = cpuct
         self.num_threads = num_threads
         self.error_log = []
+        self.writer = writer
+
+        self.games_cnt = 0
 
 
     # Does one game of self play and generates training samples.
@@ -68,13 +72,13 @@ class Trainer:
 
     def self_play_ray(self, temperature, nn):
         mcts_config = {
-            "puct_coefficient": 3.0,
+            "puct_coefficient": 0.7,
             "num_simulations": self.num_simulations,
-            "temperature": 1.5,
+            "temperature": 1.0,
             "dirichlet_epsilon": 0.25,
             "dirichlet_noise": 0.03,
             "argmax_tree_policy": False,
-            "add_dirichlet_noise": True,
+            "add_dirichlet_noise": False,
         }
         s = self.game.get_initial_state()
         tree = MCTSRAY(nn, mcts_config)
@@ -83,7 +87,6 @@ class Trainer:
 
         tree_node = Node(
                         state=s,
-                        obs=s["obs"],
                         reward=0,
                         done=done,
                         action=None,
@@ -91,13 +94,23 @@ class Trainer:
                         mcts=tree)
 
         data = []
+
+        explored_tree = 0.0
+        steps = 0
         
         while not done:
             
             available = self.game.get_available_actions(s)
 
             # Think
-            p, action, tree_node = tree.compute_action(tree_node)
+            p, action, new_tree_node = tree.compute_action(tree_node)
+
+            # free memory
+            #for nodes in tree_node.children:
+            #    if new_tree_node != nodes:
+            #        del nodes
+
+            #tree_node = new_tree_node
 
             p = nn.get_valid_dist(p, available).cpu().numpy().squeeze()
 
@@ -106,13 +119,40 @@ class Trainer:
             # Apply action
             template = np.zeros_like(available)
             template[action] = 1
-            s = self.game.take_action(s, template)
+            s_new = self.game.take_action(s, template)
+            match = False
+            for node in new_tree_node:
+                if s_new["env"].game.gamestate_to_dict() == node.state["env"].game.gamestate_to_dict():
+                    tree_node = node
+                    match = True
+                    break
+
+            explored_tree += len(new_tree_node[0].children) / np.count_nonzero(available)
+            steps += 1
+            
+            if match != True:
+                print("debug")
+            assert match, "hash does not match, games does not follow MCTS path"
+            s = s_new
 
             # Check scores
             done = self.game.check_game_over(s)
 
+        #game done
+        self.games_cnt += 1
 
+        self.writer.add_scalar('MCTS/Exploring', explored_tree / steps, self.games_cnt)
+        
         scores = self.game.get_scores(s)
+
+        if self.writer is not None:
+            for card in CARDRULES.list():
+                if card in s["env"].game.rules.rules:
+                    playersum = 0
+                    for player in s["env"].game.players:
+                        playersum += s["env"].game.rules.player_score_per_rule[int(player) - 1][card.value]
+                    self.writer.add_scalar('Score/' + card.name, playersum / len(s["env"].game.players), self.games_cnt)
+
         scores = np.append(scores, self.game.get_current_players(s))
 
         # Update training examples with outcome
@@ -144,10 +184,6 @@ class Trainer:
         if verbose:
             print("Simulating took " + str(int(time.time()-start)) + " seconds")
 
-        # Prune oldest training samples if a buffer size limit is set.
-        if self.buffer_size_limit is not None:
-            self.training_data = self.training_data[-self.buffer_size_limit:,:]
-
         if verbose:
             print("TRAINING")
             start = time.time()
@@ -166,4 +202,8 @@ class Trainer:
         if verbose:
             print("Training took " + str(int(time.time()-start)) + " seconds")
             print("Average train error:", mean_loss)
+
+        # Prune oldest training samples if a buffer size limit is set.
+        if self.buffer_size_limit is not None:
+            self.training_data = self.training_data[-self.buffer_size_limit:,:]
 

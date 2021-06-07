@@ -77,11 +77,11 @@ class PreActBlock(nn.Module):
 
 
 class SENet2(Model):
-    def __init__(self, input_shape, p_shape, v_shape, block=PreActBlock, num_blocks=[3,4,6,3]):
-        super(SENet2, self).__init__(input_shape, p_shape, v_shape)
+    def __init__(self, input, p_shape, v_shape, block=PreActBlock, num_blocks=[3,4,6,3]):
+        super(SENet2, self).__init__(input, p_shape, v_shape)
 
         self.in_planes = 64
-        self.conv1 = nn.Conv2d(input_shape[-1], 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(input["cnn_input"].shape[-1], 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block,  64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
@@ -116,7 +116,8 @@ class SENet2(Model):
             self.in_planes = planes
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, input_dict):
+        x = input_dict["cnn_input"]
         batch_size = len(x)
         this_p_shape = tuple([batch_size] + list(self.p_shape))
         this_v_shape = tuple([batch_size] + list(self.v_shape))
@@ -136,7 +137,3 @@ class SENet2(Model):
         v = torch.tanh(self.v_head(flat).view(this_v_shape))
         
         return p_logits, v
-
-
-def SENet18():
-    return SENet(PreActBlock, [2,2,2,2])

@@ -6,7 +6,6 @@ import numpy as np
 sys.path.append("..")
 from model import Model
 
-
 class BasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1):
         super(BasicBlock, self).__init__()
@@ -76,9 +75,9 @@ class PreActBlock(nn.Module):
         return out
 
 
-class SENetBig(Model):
+class SENetAC(Model):
     def __init__(self, input, p_shape, v_shape, block=PreActBlock, num_blocks=[3,4,6,3]):
-        super(SENetBig, self).__init__(input, p_shape, v_shape)
+        super(SENetAC, self).__init__(input, p_shape, v_shape)
 
         self.in_planes = 64
         self.conv1 = nn.Conv2d(input["cnn_input"].shape[-1], 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -88,7 +87,9 @@ class SENetBig(Model):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
 
-        self.p_head = torch.nn.Linear(512, np.prod(p_shape))
+        self.p_headactions =    torch.nn.Linear(512, 14) # action
+        self.p_headboard =      torch.nn.Linear(512, 20*20) # board
+
         self.v_head = torch.nn.Linear(512, np.prod(v_shape))
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -104,7 +105,8 @@ class SENetBig(Model):
     def forward(self, input_dict):
         x = input_dict["cnn_input"]
         batch_size = len(x)
-        this_p_shape = tuple([batch_size] + list(self.p_shape))
+        this_p_shapeaction = tuple([batch_size] + [14])
+        this_p_shapeboard = tuple([batch_size] + [20*20])
         this_v_shape = tuple([batch_size] + list(self.v_shape))
         x = x.permute(0,3,1,2) # NHWC -> NCHW
 
@@ -116,8 +118,16 @@ class SENetBig(Model):
         out = self.avgpool(out)
         flat = out.view(out.size(0), -1)
         
-        p_logits = self.p_head(flat).view(this_p_shape)
+        p_logits_action = self.p_headactions(flat).view(this_p_shapeaction)
+        p_logits_board = self.p_headboard(flat).view(this_p_shapeboard)
         v = torch.tanh(self.v_head(flat).view(this_v_shape))
+
+        p_logits = p_logits_action[:,:2]
+
+        for i in range(2, 14):
+            a = p_logits_action[:,i].view(tuple([batch_size] + [1]))
+            b = p_logits_board
+            p_logits = torch.cat((p_logits, a*b), -1)
         
         return p_logits, v
 

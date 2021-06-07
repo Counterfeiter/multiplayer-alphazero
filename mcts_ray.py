@@ -12,7 +12,7 @@ import numpy as np
 
 
 class Node:
-    def __init__(self, action, obs, done, reward, state, mcts, parent=None):
+    def __init__(self, action, done, reward, state, mcts, parent=None):
         self.env = parent.env
         self.action = action  # Action used to go to this state
 
@@ -36,7 +36,6 @@ class Node:
         self.reward = reward
         self.done = done
         self.state = state
-        self.obs = obs
 
         self.mcts = mcts
 
@@ -107,26 +106,32 @@ class Node:
         if action not in self.children:
             template = np.zeros(self.action_space_size) # Submit action to get s'
             template[action] = 1.0
-            next_state = self.env.take_action(self.state, template)
+            #next_state = self.env.take_action(self.state, template)
+            next_state_arr = self.env.take_action_chance_node(self.state, template)
             
-            self.children[action] = Node(
-                state=next_state,
-                action=action,
-                parent=self,
-                reward=self.env.get_scores(next_state),
-                done=self.env.check_game_over(next_state),
-                obs=next_state["obs"],
-                mcts=self.mcts)
+            self.children[action] = []
+            for next_state in next_state_arr:
+                node = Node(
+                    state=next_state,
+                    action=action,
+                    parent=self,
+                    reward=self.env.get_scores(next_state) if self.mcts.record_score else np.zeros(self.env.get_num_players()),
+                    done=self.env.check_game_over(next_state),
+                    mcts=self.mcts)
+                self.children[action].append(node)
             
-            #store reference to the node
-            self.mcts.lockup_table = { self.env.get_hash(next_state) : self.children[action] }
-        return self.children[action]
+                #store reference to the node
+                self.mcts.lockup_table = { self.env.get_hash(next_state) : self.children[action][-1] }
+        return random.choice(self.children[action])
 
     def backup(self, value):
         current = self
         while current.parent is not None:
             current.number_visits += 1
-            current.total_value += value
+            if self.mcts.use_current_score:
+                current.total_value += self.reward
+            else:
+                current.total_value += value
             current.total_reward += self.reward
             current = current.parent
 
@@ -144,7 +149,7 @@ class RootParentNode:
 
 
 class MCTS:
-    def __init__(self, model, mcts_param):
+    def __init__(self, model, mcts_param, record_score = False, use_current_score = False):
         self.model = model
         self.temperature = mcts_param["temperature"]
         self.dir_epsilon = mcts_param["dirichlet_epsilon"]
@@ -154,6 +159,9 @@ class MCTS:
         self.add_dirichlet_noise = mcts_param["add_dirichlet_noise"]
         self.c_puct = mcts_param["puct_coefficient"]
 
+        self.record_score = record_score
+        self.use_current_score = use_current_score
+
         self.lockup_table = {}
 
     def compute_action(self, node):
@@ -162,7 +170,7 @@ class MCTS:
             if leaf.done:
                 value = leaf.reward
             else:
-                child_priors, value = self.model.predict_ray(leaf.obs, leaf.valid_actions)
+                child_priors, value = self.model.predict_ray(leaf.state["obs"], leaf.valid_actions)
                 if self.add_dirichlet_noise:
                     child_priors = (1 - self.dir_epsilon) * child_priors
                     noise = np.random.dirichlet([self.dir_noise] * child_priors.size)
@@ -172,6 +180,7 @@ class MCTS:
             leaf.backup(value)
 
         # Tree policy target (TPT)
+        
         
         tree_policy = np.power(node.child_number_visits, self.temperature) / node.number_visits
         #print(tree_policy)
@@ -186,7 +195,13 @@ class MCTS:
         if self.exploit:
             # if exploit then choose action that has the maximum
             # tree policy probability
-            action = np.random.choice(np.flatnonzero(tree_policy == tree_policy.max()))
+            if 0:
+                masked_child_score = node.child_total_value[:,node.current_player]
+                masked_child_score[~node.valid_actions] = -np.inf
+                action_candidates = np.flatnonzero(np.isclose(masked_child_score, masked_child_score.max()))
+            else:
+                action_candidates = np.flatnonzero(np.isclose(tree_policy, tree_policy.max()))
+            action = np.random.choice(action_candidates)
             #action = np.argmax(tree_policy)
 
             if node.valid_actions[action] == False:

@@ -2,16 +2,16 @@
     "game": "KingdomBuilder",
     "model": "ConvNet",
     "ckpt_frequency": 5,
-    "num_updates": 25,
+    "num_updates": 50,
     "num_games": 5,
     "weight_decay": 0,
-    "lr": 0.5e-5,
-    "cpuct": 3.0,
-    "num_simulations": 50,
-    "batch_size": 64,
+    "lr": 1e-2,
+    "cpuct": 1.0,
+    "num_simulations": 30,
+    "batch_size": 256,
     "num_threads": 1,
     "cuda": true,
     "verbose": true,
     "resume": true,
-    "buffer_size_limit": 10000
+    "buffer_size_limit": 8000
 }

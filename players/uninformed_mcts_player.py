@@ -14,7 +14,7 @@ class UninformedMCTSPlayer(Player):
         self.simulations = simulations
         #self.tree = MCTS(game, NeuralNetwork(game, DumbNet), add_noise=False)
         self.mcts_config = {
-            "puct_coefficient": 3.0,
+            "puct_coefficient": 5.0,
             "num_simulations": simulations,
             "temperature": 1.5,
             "dirichlet_epsilon": 0.25,
@@ -34,10 +34,9 @@ class UninformedMCTSPlayer(Player):
             print("#### Happy while reloading a already searched state")
         else:
             #clear memory restart with mcts search
-            self.tree = MCTSRAY(NeuralNetwork(self.game, DumbNet), self.mcts_config)
+            self.tree = MCTSRAY(NeuralNetwork(self.game, DumbNet), self.mcts_config, record_score=True, use_current_score = True)
             self.tree_node = Node(
                 state=s,
-                obs=s["obs"],
                 reward=0,
                 done=False,
                 action=None,
@@ -45,11 +44,24 @@ class UninformedMCTSPlayer(Player):
                 mcts=self.tree)
 
         # Think
-        p, action, self.tree_node = self.tree.compute_action(self.tree_node)
+        p, action, next_nodes = self.tree.compute_action(self.tree_node)
+
+        i = 0
+        for key, nodes in self.tree_node.children.items():
+            for value in nodes:
+                i += 1
+                print("Visit child action {}! visits: {} value: {} score: {}".format(key, value.number_visits, value.total_value / value.number_visits, value.total_reward / value.number_visits))
+
         available = self.game.get_available_actions(s)
         template = np.zeros_like(available)
         template[action] = 1
         s_prime = self.game.take_action(s, template)
+
+        for node in next_nodes:
+            if s_prime["env"].game.gamestate_to_dict() == node.state["env"].game.gamestate_to_dict():
+                self.tree_node = node
+                break
+
         return s_prime
 
     def reset(self):

@@ -10,10 +10,9 @@ class NeuralNetwork():
         self.game = game
         self.batch_size = batch_size
         init_state = game.get_initial_state()
-        input_shape = init_state["obs"].shape
         p_shape = game.get_available_actions(init_state).shape
         v_shape = (game.get_num_players(),)
-        self.model = model_class(input_shape, p_shape, v_shape)
+        self.model = model_class(init_state["obs"], p_shape, v_shape)
         self.cuda = cuda
         if self.cuda:
             self.model = self.model.to('cuda')
@@ -32,17 +31,24 @@ class NeuralNetwork():
 
     # Incoming data is a numpy array containing (state, prob, outcome) tuples.
     def train(self, data):
-        loss_weight_v = 0.9
+        loss_weight_v = 0.95
         self.model.train()
         batch_size=self.batch_size
         idx = np.random.randint(len(data), size=batch_size)
         batch = data[idx][:,:3] # select data, add no action mask
         action_mask = data[idx][:,3]
         states = np.stack(batch[:,0])
-        x = torch.from_numpy(states)
-        p_pred, v_pred = self.model(x)
+        cnn = torch.tensor([],dtype=torch.float32)
+        ff = torch.tensor([],dtype=torch.float32)
+        for value in states:
+            cnn = torch.cat((cnn, torch.from_numpy(value["cnn_input"]).unsqueeze(0)), 0)
+            ff = torch.cat((ff, torch.from_numpy(value["ff_input"]).unsqueeze(0)), 0)
+
+        torch_states = {"cnn_input":cnn, "ff_input":ff}
+
+        p_pred, v_pred = self.model(torch_states)
         p_gt, v_gt = batch[:,1], np.stack(batch[:,2])
-        loss_p, loss_v = self.loss(states, action_mask, (p_pred, v_pred), (p_gt, v_gt))
+        loss_p, loss_v = self.loss(torch_states, action_mask, (p_pred, v_pred), (p_gt, v_gt))
         self.epoche_cnt += 1
         if self.writer is not None:
             self.writer.add_scalar('Training/DataSamples', len(data), self.epoche_cnt)
@@ -57,22 +63,34 @@ class NeuralNetwork():
     # Given a single state s, does inference to produce a distribution of valid moves P and a value V.
     def predict(self, state, action_mask):
         self.model.eval()
-        input_s = np.array([state["obs"]], dtype=np.float32)
+        input_cnn = np.array([state["obs"]["cnn_input"]], dtype=np.float32)
+        input_ff = np.array([state["obs"]["ff_input"]], dtype=np.float32)
         with torch.no_grad():
-            input_s = torch.from_numpy(input_s)
-            p_logits, v = self.model(input_s)
+            input_cnn = torch.from_numpy(input_cnn)
+            input_ff = torch.from_numpy(input_ff)
+            p_logits, v = self.model({"cnn_input":input_cnn, "ff_input":input_ff})
             p, v = self.get_valid_dist(p_logits[0], action_mask).cpu().numpy().squeeze(), v.cpu().numpy().squeeze() # EXP because log softmax
         return p, v
 
     # Given a single state s, does inference to produce a distribution of valid moves P and a value V.
     def predict_ray(self, obs, action_mask):
         self.model.eval()
-        input_s = np.array([obs], dtype=np.float32)
+        input_cnn = np.array([obs["cnn_input"]], dtype=np.float32)
+        input_ff = np.array([obs["ff_input"]], dtype=np.float32)
         with torch.no_grad():
-            input_s = torch.from_numpy(input_s)
-            p_logits, v = self.model(input_s)
-            dist = torch.nn.functional.log_softmax(p_logits, dim=-1)
-        return torch.exp(p_logits).cpu().numpy().squeeze(), v.cpu().numpy().squeeze()
+            input_cnn = torch.from_numpy(input_cnn)
+            input_ff = torch.from_numpy(input_ff)
+            action_mask = torch.from_numpy(action_mask)
+            p_logits, v = self.model({"cnn_input":input_cnn, "ff_input":input_ff})
+            assert p_logits.size()[0] <= 1
+            #only softmax over selection
+            selection = torch.masked_select(p_logits, action_mask)
+            dist = torch.nn.functional.log_softmax(selection, dim=-1)
+            dist = torch.exp(dist)
+            #revert selection, build full vector
+            softmax_logits = torch.zeros_like(p_logits[0])
+            softmax_logits[action_mask] = dist
+        return softmax_logits.cpu().numpy().squeeze(), v.cpu().numpy().squeeze()
 
 
     # MSE + Cross entropy
@@ -94,7 +112,7 @@ class NeuralNetwork():
             gt = torch.from_numpy(p_gt[i].astype(np.float32))
             if self.cuda:
                 gt = gt.cuda()
-            s = states[i]
+            #s = states[i]
             logits = p_pred[i]
             pred = self.get_valid_dist(logits, action_mask[i], log_softmax=True)
             p_loss += -torch.sum(gt*pred)

@@ -101,7 +101,8 @@ class SENet(Model):
             self.in_planes = planes
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, input_dict):
+        x = input_dict["cnn_input"]
         batch_size = len(x)
         this_p_shape = tuple([batch_size] + list(self.p_shape))
         this_v_shape = tuple([batch_size] + list(self.v_shape))

@@ -67,7 +67,10 @@ if __name__ == "__main__":
     from players.human_player import HumanPlayer
     from neural_network import NeuralNetwork
     from models.senet import SENet
+    from models.senet2 import SENet2
     from models.senetbig import SENetBig
+    from models.ffnet import FFNet
+    from models.senetmixed import SENetMixed
     from models.convnet import ConvNet
     from players.uninformed_mcts_player import UninformedMCTSPlayer
     from players.deep_mcts_player import DeepMCTSPlayer
@@ -78,16 +81,17 @@ if __name__ == "__main__":
 
     # Change these variable 
     game = KindgomBuilder()
-    ckpt = 40
-    nn = NeuralNetwork(game, SENetBig, cuda=True)
+    ckpt = 30
+    nn = NeuralNetwork(game, FFNet, cuda=True)
     nn.load(ckpt)
     
     # HumanPlayer(game),
     # UninformedMCTSPlayer(game, simulations=1000)
-    opponents = [HumanPlayer(game) for _ in range(1)]
-    #opponents = [UninformedMCTSPlayer(game, simulations=500) for _ in range(3)]
-    ai = DeepMCTSPlayer(game, nn, simulations=5000)
-    #ai = UninformedMCTSPlayer(game, simulations=4000)
+    opponents = [HumanPlayer(game)]
+    #opponents = [DeepMCTSPlayer(game, nn, simulations=2000)]
+    #opponents = [UninformedMCTSPlayer(game, simulations=500) for _ in range(1)]
+    ai = DeepMCTSPlayer(game, nn, simulations=2000)
+    #ai = UninformedMCTSPlayer(game, simulations=10000)
     
     players = [ai] + opponents
     play_load_match(game, players, "initalgame.ini", verbose=True)

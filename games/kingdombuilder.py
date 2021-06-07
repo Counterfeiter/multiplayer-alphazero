@@ -2,7 +2,8 @@ import numpy as np
 import sys
 import copy
 from scipy.signal import correlate2d
-from .kingdombuildergym import ParametricCNNKingdomBuilderEnv
+from kingdombuilder import TERRAIN
+from .kingdombuildergym import ParametricCNNKingdomBuilderEnv, ParametricMixedKingdomBuilderEnv, ParametricFFKingdomBuilderEnv
 sys.path.append("..")
 from game import Game
 
@@ -15,8 +16,8 @@ class AZKingdomBuilder(Game):
     # There are extra layers to represent X and O pieces, as well as a turn indicator layer.
     def get_initial_state(self, **kwargs):
         #level = 'easy'
-        #level = 'intermediate'
-        level = 'professional'
+        level = 'intermediate'
+        #level = 'professional'
         #level = 'professional2player'
         train = True
         if 'train' in kwargs:
@@ -33,6 +34,26 @@ class AZKingdomBuilder(Game):
     def get_available_actions(self, s):
         return s["env"].action_mask
         
+    # this will take the given action for all possible outcomes (could be large!)
+    def take_action_chance_node(self, s, a):
+        current_player = self.get_player(s)
+        action = np.argmax(a)
+        states = []
+
+        if action == 0 or action == 1:
+            for tr in TERRAIN.list():
+                s_copy = copy.deepcopy(s)
+                obs, _, _, _ = s_copy["env"].step(action, force_card = tr)
+                s_copy["obs"] = obs["obs"]
+                states.append(s_copy)
+        else:
+            s_copy = copy.deepcopy(s)
+            obs, _, _, _ = s_copy["env"].step(action, force_card = None)
+            s_copy["obs"] = obs["obs"]
+            states.append(s_copy)
+
+        return states
+
     # Place an X, O, or Y in state.
     def take_action(self, s, a):
         s_copy = copy.deepcopy(s)
@@ -91,4 +112,6 @@ class AZKingdomBuilder(Game):
                 str(s["env"].game.player.card).encode("ascii") + \
                 str(s["env"].game.select_coord).encode("ascii") + \
                 str(s["env"].game.townstoplay).encode("ascii") + \
-                s["obs"].tostring() + self.get_available_actions(s).tostring())
+                s["obs"]["cnn_input"].tostring() + \
+                s["obs"]["ff_input"].tostring() + \
+                self.get_available_actions(s).tostring())

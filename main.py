@@ -3,8 +3,11 @@ import sys
 import numpy as np
 
 from models.senet import SENet
+from models.senetac import SENetAC
 from models.senet2 import SENet2
+from models.ffnet import FFNet
 from models.convnet import ConvNet
+from models.senetmixed import SENetMixed
 from models.senetbig import SENetBig
 from games.tictactoe import TicTacToe
 from games.tictacmo import TicTacMo
@@ -33,7 +36,8 @@ nn = NeuralNetwork(game=game, model_class=model_class, lr=config["lr"],
 trainer = Trainer(game=game, nn=nn, num_simulations=sims,
 num_games=config["num_games"], num_updates=config["num_updates"], 
 buffer_size_limit=config["buffer_size_limit"], cpuct=config["cpuct"],
-num_threads=config["num_threads"])
+num_threads=config["num_threads"],
+writer=writer)
 
 # Logic for resuming training
 checkpoints = nn.list_checkpoints()
